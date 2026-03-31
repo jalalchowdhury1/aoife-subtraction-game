@@ -24,6 +24,7 @@ interface QuestionStats {
   timesShown: number;
   totalTime: number; // total time spent on this equation in ms
   avgTime: number;   // average time per correct answer
+  timesShownInCurrentSession: number; // track repeats in current session
 }
 
 interface ProgressData {
@@ -84,6 +85,7 @@ export default function AoifeMathGame() {
   const startTimeRef = useRef<number | null>(null);
   const questionStartTimeRef = useRef<number>(0);
   const [currentQuestionTimes, setCurrentQuestionTimes] = useState<Record<string, number>>({});
+  const [sessionTimesShown, setSessionTimesShown] = useState<Record<string, number>>({});
   const [showAdmin, setShowAdmin] = useState(false);
   const [repeatStruggling, setRepeatStruggling] = useState(true);
 
@@ -190,6 +192,7 @@ export default function AoifeMathGame() {
     setTimerStarted(false);
     setElapsedTime(0);
     setCurrentQuestionTimes({});
+    setSessionTimesShown({});
     startTimeRef.current = null;
     questionStartTimeRef.current = Date.now();
     if (timerRef.current) {
@@ -259,7 +262,7 @@ export default function AoifeMathGame() {
           setAttempt(1);
         } else {
           // Calculate and save slowest equations
-          const slowestEquations = calculateSlowestEquations(currentQuestionTimes, progress.questionStats);
+          const slowestEquations = calculateSlowestEquations(currentQuestionTimes, sessionTimesShown, progress.questionStats);
 
           // Save progress with score, best time, and slowest equations
           const newProgress = { ...progress };
@@ -312,7 +315,7 @@ export default function AoifeMathGame() {
             setShowAnswer(false);
           } else {
             // Calculate and save slowest equations
-            const slowestEquations = calculateSlowestEquations(currentQuestionTimes, progress.questionStats);
+            const slowestEquations = calculateSlowestEquations(currentQuestionTimes, sessionTimesShown, progress.questionStats);
 
             // Save progress with wrong answer and slowest equations
             const newProgress = { ...progress };
@@ -328,26 +331,41 @@ export default function AoifeMathGame() {
     }
   };
 
-  // Calculate the slowest equations to repeat
+  // Calculate the slowest equations that have been shown 3+ times
   const calculateSlowestEquations = (
     currentTimes: Record<string, number>,
+    sessionShown: Record<string, number>,
     existingStats: Record<string, QuestionStats>
   ): string[] => {
-    const allTimes: { id: string; avgTime: number }[] = [];
+    const allCandidates: { id: string; avgTime: number; timesShown: number }[] = [];
 
-    // Get times from this session
-    for (const [id, time] of Object.entries(currentTimes)) {
+    // Get all equations with their times shown
+    const allIds = new Set([
+      ...Object.keys(currentTimes),
+      ...Object.keys(sessionShown),
+      ...Object.keys(existingStats)
+    ]);
+
+    for (const id of allIds) {
       const existing = existingStats[id];
-      // Use existing avgTime if available, otherwise use current session time
-      const avgTime = existing?.avgTime || time;
-      allTimes.push({ id, avgTime });
+      const sessionTime = currentTimes[id];
+      const sessionCount = sessionShown[id] || 0;
+
+      // Total times shown = existing timesShown + session count
+      const totalShown = (existing?.timesShown || 0) + sessionCount;
+
+      // Only consider equations shown 3+ times
+      if (totalShown >= 3) {
+        const avgTime = existing?.avgTime || sessionTime || 0;
+        allCandidates.push({ id, avgTime, timesShown: totalShown });
+      }
     }
 
     // Sort by slowest (highest time) first
-    allTimes.sort((a, b) => b.avgTime - a.avgTime);
+    allCandidates.sort((a, b) => b.avgTime - a.avgTime);
 
-    // Return top 3 slowest
-    return allTimes.slice(0, 3).map(item => item.id);
+    // Return top 5 slowest
+    return allCandidates.slice(0, 5).map(item => item.id);
   };
 
   const handlePlayAgain = () => {
