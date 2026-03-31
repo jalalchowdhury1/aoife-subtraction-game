@@ -355,9 +355,9 @@ export default function AoifeMathGame() {
       // Total times shown = existing timesShown + session count
       const totalShown = (existing?.timesShown || 0) + sessionCount;
 
-      // Only consider equations shown 3+ times
-      if (totalShown >= 3) {
-        const avgTime = existing?.avgTime || sessionTime || 0;
+      // Include equations from current session OR shown 3+ times overall
+      if (sessionCount > 0 || totalShown >= 3) {
+        const avgTime = sessionTime || existing?.avgTime || 0;
         allCandidates.push({ id, avgTime, timesShown: totalShown });
       }
     }
@@ -556,7 +556,7 @@ export default function AoifeMathGame() {
                     );
                   })
                 ) : (
-                  <p className="text-gray-400 text-sm">Play a few rounds to see struggling patterns</p>
+                  <p className="text-gray-400 text-sm">Complete one round to see patterns</p>
                 )}
               </div>
             </div>
